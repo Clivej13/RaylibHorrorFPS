@@ -8,6 +8,7 @@ public sealed class LevelMetadata
     public required List<EnemySpawnData> Enemies { get; init; }
     public required List<KeySpawnData> Keys { get; init; }
     public required List<DoorSpawnData> Doors { get; init; }
+    public required List<LightSpawnData> Lights { get; init; }
 }
 
 public static class LevelMetadataLoader
@@ -58,7 +59,8 @@ public static class LevelMetadataLoader
                 X = MapLoader.TileToWorld(d.TileX, tileSize),
                 Y = MapLoader.TileToWorld(d.TileY, tileSize),
                 Locked = !string.IsNullOrWhiteSpace(d.RequiredKeyId)
-            }).ToList()
+            }).ToList(),
+            Lights = (dto.Lights ?? []).Select(ParseLight).ToList()
         };
     }
 
@@ -68,6 +70,7 @@ public static class LevelMetadataLoader
         public List<EnemyDto>? Enemies { get; set; }
         public List<KeyDto>? Keys { get; set; }
         public List<DoorDto>? Doors { get; set; }
+        public List<LightDto>? Lights { get; set; }
     }
 
     private sealed class EnemyDto
@@ -84,11 +87,51 @@ public static class LevelMetadataLoader
         public int TileY { get; set; }
     }
 
+    private static LightSpawnData ParseLight(LightDto light)
+    {
+        if (!Enum.TryParse(light.Colour, ignoreCase: true, out LightColour colour))
+        {
+            throw new InvalidOperationException($"[MapValidation] Light '{light.Id}' has unsupported colour '{light.Colour}'. Supported colours: red, green, white, yellow.");
+        }
+
+        if (!Enum.TryParse(light.EnabledWhen, ignoreCase: true, out PowerState enabledWhen))
+        {
+            throw new InvalidOperationException($"[MapValidation] Light '{light.Id}' has unsupported enabledWhen state '{light.EnabledWhen}'. Supported states: Emergency, Online, Always.");
+        }
+
+        if (light.Radius <= 0f)
+        {
+            throw new InvalidOperationException($"[MapValidation] Light '{light.Id}' must have a radius greater than zero.");
+        }
+
+        return new LightSpawnData
+        {
+            Id = light.Id,
+            TileX = light.TileX,
+            TileY = light.TileY,
+            Radius = light.Radius,
+            Colour = colour,
+            Enabled = light.Enabled,
+            EnabledWhen = enabledWhen
+        };
+    }
+
     private sealed class DoorDto
     {
         public string Id { get; set; } = "silver_door";
         public int TileX { get; set; }
         public int TileY { get; set; }
         public string? RequiredKeyId { get; set; }
+    }
+
+    private sealed class LightDto
+    {
+        public string Id { get; set; } = "light";
+        public int TileX { get; set; }
+        public int TileY { get; set; }
+        public float Radius { get; set; }
+        public string Colour { get; set; } = "white";
+        public bool Enabled { get; set; } = true;
+        public string EnabledWhen { get; set; } = "Always";
     }
 }

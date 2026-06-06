@@ -18,6 +18,7 @@ public sealed class RaycastRenderer
         RayHitType Type,
         float Distance,
         float TextureX,
+        Vector2 HitPoint,
         bool HitVertical,
         bool BlocksView,
         (Color[] Pixels, int Width, int Height) Texture);
@@ -134,8 +135,8 @@ public sealed class RaycastRenderer
         float cameraHeight = DungeonMap.TileSize * 0.5f;
         float planeHeightDelta = isFloor ? cameraHeight : (DungeonMap.TileSize - cameraHeight);
 
-        float shadeMin = isFloor ? 0.10f : 0.06f;
-        float shadeMax = isFloor ? 0.54f : 0.30f;
+        float shadeMin = isFloor ? 0.07f : 0.04f;
+        float shadeMax = isFloor ? 0.36f : 0.20f;
         float falloff = isFloor ? AtmosphereDistanceScale * 0.62f : AtmosphereDistanceScale * 0.52f;
 
         for (int y = startY; y < endYExclusive; y++)
@@ -162,7 +163,7 @@ public sealed class RaycastRenderer
                 int ty = WorldToTileTexel(worldY, DungeonMap.TileSize, _wallHeight);
 
                 Color c = _wallPixels[(ty * _wallWidth) + tx];
-                _framebuffer[rowIndex + x] = Modulate(c, shade);
+                _framebuffer[rowIndex + x] = ApplyLighting(c, shade, worldX, worldY);
 
                 worldX += stepX;
                 worldY += stepY;
@@ -210,7 +211,7 @@ public sealed class RaycastRenderer
         int drawTop = horizon - (sliceHeight / 2);
         int drawBottom = drawTop + sliceHeight;
 
-        float maxBrightness = hit.Type == RayHitType.Wall ? 0.74f : 0.80f;
+        float maxBrightness = hit.Type == RayHitType.Wall ? 0.48f : 0.54f;
         float minBrightness = hit.Type == RayHitType.Wall ? WallMinBrightness : DoorMinBrightness;
         float falloff = hit.Type == RayHitType.Wall ? AtmosphereDistanceScale * 0.85f : AtmosphereDistanceScale * 0.9f;
         byte shade = ShadeByte(correctedDist, minBrightness, maxBrightness, falloff);
@@ -223,7 +224,7 @@ public sealed class RaycastRenderer
             int texY = Math.Clamp((int)(t * hit.Texture.Height), 0, hit.Texture.Height - 1);
             Color c = hit.Texture.Pixels[(texY * hit.Texture.Width) + texX];
             if (c.A < 10) continue;
-            _framebuffer[y * InternalWidth + screenX] = Modulate(c, shade);
+            _framebuffer[y * InternalWidth + screenX] = ApplyLighting(c, shade, hit.HitPoint.X, hit.HitPoint.Y);
         }
     }
 
@@ -260,7 +261,7 @@ public sealed class RaycastRenderer
             int drawRight = drawLeft + spriteWidth;
 
             var sprite = GetSpritePixels(enemy.CurrentTexture);
-            byte shade = ShadeByte(transformY, SpriteMinBrightness, 0.85f, AtmosphereDistanceScale * 0.9f);
+            byte shade = ShadeByte(transformY, SpriteMinBrightness, 0.58f, AtmosphereDistanceScale * 0.9f);
 
             for (int screenX = Math.Max(0, drawLeft); screenX < Math.Min(InternalWidth, drawRight); screenX++)
             {
@@ -275,7 +276,7 @@ public sealed class RaycastRenderer
                     Color texel = sprite.Pixels[(texY * sprite.Width) + texX];
                     if (texel.A < 10) continue;
 
-                    Color shaded = Modulate(texel, shade);
+                    Color shaded = ApplyLighting(texel, shade, enemy.Position.X, enemy.Position.Y);
                     if (enemy.HitFlashAmount > 0f)
                     {
                         shaded = Raylib.ColorLerp(shaded, Color.Red, enemy.HitFlashAmount * 0.7f);
@@ -318,7 +319,7 @@ public sealed class RaycastRenderer
         int drawLeft = spriteScreenX - (spriteWidth / 2);
         int drawRight = drawLeft + spriteWidth;
 
-        byte shade = ShadeByte(transformY, SpriteMinBrightness, 0.85f, AtmosphereDistanceScale * 0.9f);
+        byte shade = ShadeByte(transformY, SpriteMinBrightness, 0.58f, AtmosphereDistanceScale * 0.9f);
         for (int screenX = Math.Max(0, drawLeft); screenX < Math.Min(InternalWidth, drawRight); screenX++)
         {
             if (checkDepth && transformY >= _depthBuffer[screenX]) continue;
@@ -328,7 +329,7 @@ public sealed class RaycastRenderer
                 int texY = Math.Clamp((int)((screenY - drawTop) / (float)spriteHeight * sprite.Height), 0, sprite.Height - 1);
                 Color texel = sprite.Pixels[(texY * sprite.Width) + texX];
                 if (texel.A < 10) continue;
-                _framebuffer[(screenY * InternalWidth) + screenX] = Modulate(texel, shade);
+                _framebuffer[(screenY * InternalWidth) + screenX] = ApplyLighting(texel, shade, worldPos.X, worldPos.Y);
             }
         }
     }
@@ -421,7 +422,39 @@ public sealed class RaycastRenderer
         float textureCoord = hitVertical ? hitPoint.Y : hitPoint.X;
         float textureX = textureCoord % DungeonMap.TileSize;
         if (textureX < 0f) textureX += DungeonMap.TileSize;
-        return new RayHit(type, distance, (textureX / DungeonMap.TileSize) * texture.Width, hitVertical, blocksView, texture);
+        return new RayHit(type, distance, (textureX / DungeonMap.TileSize) * texture.Width, hitPoint, hitVertical, blocksView, texture);
+    }
+
+    private Color ApplyLighting(Color c, byte shade, float worldX, float worldY)
+    {
+        float distanceShade = shade / 255f;
+        float red = 0.22f;
+        float green = 0.22f;
+        float blue = 0.24f;
+
+        float tileX = worldX / DungeonMap.TileSize;
+        float tileY = worldY / DungeonMap.TileSize;
+        foreach (Light light in _map.Lights)
+        {
+            if (!light.IsActive(_map.CurrentPowerState)) continue;
+
+            float dx = tileX - (light.TileX + 0.5f);
+            float dy = tileY - (light.TileY + 0.5f);
+            float distance = MathF.Sqrt((dx * dx) + (dy * dy));
+            if (distance > light.Radius) continue;
+
+            float intensity = 1f - (distance / light.Radius);
+            intensity *= intensity;
+            Color colour = light.ToRaylibColor();
+            red += (colour.R / 255f) * intensity;
+            green += (colour.G / 255f) * intensity;
+            blue += (colour.B / 255f) * intensity;
+        }
+
+        red = Math.Clamp(red * distanceShade, 0f, 1f);
+        green = Math.Clamp(green * distanceShade, 0f, 1f);
+        blue = Math.Clamp(blue * distanceShade, 0f, 1f);
+        return new Color((byte)(c.R * red), (byte)(c.G * green), (byte)(c.B * blue), (byte)255);
     }
 
     private static Color Modulate(Color c, byte shade)

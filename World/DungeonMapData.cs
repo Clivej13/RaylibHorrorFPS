@@ -29,3 +29,14 @@ public sealed class ExitData
     public float Y { get; set; }
     public bool RequiresAllKeys { get; set; } = true;
 }
+
+public sealed class LightSpawnData
+{
+    public required string Id { get; set; }
+    public int TileX { get; set; }
+    public int TileY { get; set; }
+    public float Radius { get; set; }
+    public LightColour Colour { get; set; }
+    public bool Enabled { get; set; } = true;
+    public PowerState EnabledWhen { get; set; } = PowerState.Always;
+}

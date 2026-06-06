@@ -148,11 +148,40 @@
       "tileY": 25,
       "requiredKeyId": "2"
     },
-        {
+    {
       "id": "door_10_22",
       "tileX": 10,
       "tileY": 22,
       "requiredKeyId": "1"
+    }
+  ],
+  "lights": [
+    {
+      "id": "airlock_emergency_red",
+      "tileX": 5,
+      "tileY": 1,
+      "radius": 8,
+      "colour": "red",
+      "enabled": true,
+      "enabledWhen": "Emergency"
+    },
+    {
+      "id": "airlock_online_green",
+      "tileX": 5,
+      "tileY": 1,
+      "radius": 8,
+      "colour": "green",
+      "enabled": true,
+      "enabledWhen": "Online"
+    },
+    {
+      "id": "corridor_weak_emergency_yellow",
+      "tileX": 19,
+      "tileY": 22,
+      "radius": 5,
+      "colour": "yellow",
+      "enabled": true,
+      "enabledWhen": "Emergency"
     }
   ]
 }
