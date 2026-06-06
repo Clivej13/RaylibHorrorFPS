@@ -16,6 +16,8 @@ public sealed class DungeonMap
     public List<Enemy> Enemies { get; }
     public List<KeyItem> Keys { get; } = [];
     public List<DoorEntity> Doors { get; } = [];
+    public List<Light> Lights { get; } = [];
+    public PowerState CurrentPowerState { get; set; } = PowerState.Emergency;
     public ExitData? Exit { get; }
 
     public DungeonMap(string levelMetadataPath, Texture2D goblinTexture, Texture2D goblinLightWindupTexture, Texture2D goblinHeavyWindupTexture, Texture2D goblinStrikeTexture, Texture2D goblinStaggerTexture, Texture2D keyTexture)
@@ -38,6 +40,20 @@ public sealed class DungeonMap
             }
 
             Keys.Add(new KeyItem(new Vector2(spawn.X, spawn.Y), spawn.Id, keyTexture));
+        }
+
+        foreach (LightSpawnData spawn in metadata.Lights)
+        {
+            Lights.Add(new Light
+            {
+                Id = spawn.Id,
+                TileX = spawn.TileX,
+                TileY = spawn.TileY,
+                Radius = spawn.Radius,
+                Colour = spawn.Colour,
+                Enabled = spawn.Enabled,
+                EnabledWhen = spawn.EnabledWhen
+            });
         }
 
         foreach (DoorSpawnData spawn in metadata.Doors)
@@ -83,6 +99,8 @@ public sealed class DungeonMap
     {
         return Doors.FirstOrDefault(d => (int)(d.Position.X / TileSize) == gx && (int)(d.Position.Y / TileSize) == gy);
     }
+
+    public IEnumerable<Light> ActiveLights => Lights.Where(light => light.IsActive(CurrentPowerState));
 
     public bool IsBlockedAtWorld(float worldX, float worldY)
     {
